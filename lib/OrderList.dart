@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
 class OrderListView extends StatefulWidget {
   final List<Map<String, dynamic>> orders;
@@ -16,6 +17,8 @@ class OrderListView extends StatefulWidget {
 class _OrderListViewState extends State<OrderListView> {
   @override
   Widget build(BuildContext context) {
+    final firestore = FirebaseFirestore.instance;
+
     return widget.orders.isEmpty
         ? const Center(
             child: CircularProgressIndicator()) // Show loading indicator
@@ -190,6 +193,7 @@ class _OrderListViewState extends State<OrderListView> {
                               children: [
                                 Text(
                                   'Total: ₹ ${totalAmount.toStringAsFixed(2)}',
+                                  // 'Total: ₹ ${totalAmount.toStringAsFixed(2)}',
                                   style: GoogleFonts.outfit(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -201,28 +205,68 @@ class _OrderListViewState extends State<OrderListView> {
                                     print('sar object');
                                     if (order['deliveryCompleted'] != true) {
                                       try {
-                                        await FirebaseFirestore.instance
-                                            .collection('Orders')
-                                            .doc(order[
-                                                'orderId']) // Ensure orderId is the document ID
-                                            .update(
-                                                {'deliveryCompleted': true});
+                                        String today = DateFormat('dd-MM-yyyy')
+                                            .format(DateTime.now());
+                                        DocumentReference dailyStatsRef =
+                                            firestore
+                                                .collection('Admin')
+                                                .doc('OrderStatistics')
+                                                .collection('DailyStats')
+                                                .doc(today);
 
-                                        // ScaffoldMessenger.of(context).showSnackBar(
-                                        //   const SnackBar(content: Text('Delivery marked as completed')),
-                                        // );
+                                        await firestore.runTransaction(
+                                            (transaction) async {
+                                          transaction.update(
+                                              firestore
+                                                  .collection('Admin')
+                                                  .doc('AdminDash'),
+                                              {
+                                                'Total_Delivered':
+                                                    FieldValue.increment(1),
+                                                'Total_Income':
+                                                    FieldValue.increment(
+                                                        totalPrice),
+                                              });
 
-                                        setState(() {
-                                          widget.orders.removeAt(
-                                              index); // Remove order from pending list
+                                          transaction.set(
+                                              dailyStatsRef,
+                                              {
+                                                'Delivered':
+                                                    FieldValue.increment(1),
+                                                'Income': FieldValue.increment(
+                                                    totalPrice),
+                                              },
+                                              SetOptions(merge: true));
                                         });
 
-                                        // Notify parent widget if a callback is provided
+                                        await firestore
+                                            .collection('Orders')
+                                            .doc(order['orderId'])
+                                            .update({
+                                          'deliveryCompleted': true,
+                                          'deletionTime': DateTime.now()
+                                              .add(Duration(days: 1))
+                                        });
+
+                                        setState(() {
+                                          widget.orders.removeAt(index);
+                                        });
+
                                         if (widget.markOrderAsCompleted !=
                                             null) {
                                           widget.markOrderAsCompleted!(
                                               order['orderId']);
                                         }
+
+                                        await Future.delayed(Duration(days: 1));
+                                        await firestore
+                                            .collection('Orders')
+                                            .doc(order['orderId'])
+                                            .delete();
+
+                                        // ScaffoldMessenger.of(context).showSnackBar(
+                                        //   const SnackBar(content: Text('Delivery marked as completed')),
+                                        // );
                                       } catch (e) {
                                         ScaffoldMessenger.of(context)
                                             .showSnackBar(
@@ -231,15 +275,30 @@ class _OrderListViewState extends State<OrderListView> {
                                                   'Error updating delivery: $e')),
                                         );
                                       }
-                                    } else if
-                                     (order['deliveryCompleted'] == true) {
+                                    } else if (order['deliveryCompleted'] ==
+                                        true) {
                                       try {
-                                        await FirebaseFirestore.instance
+                                        await firestore
+                                            .collection('Admin')
+                                            .doc('AdminDash')
+                                            .update({
+                                          'Total_Income':
+                                              FieldValue.increment(-totalPrice)
+                                        });
+
+                                        await firestore
+                                            .collection('Admin')
+                                            .doc('AdminDash')
+                                            .update({
+                                          'Total_Delivered':
+                                              FieldValue.increment(-1)
+                                        });
+                                        await firestore
                                             .collection('Orders')
                                             .doc(order[
-                                        'orderId']) // Ensure orderId is the document ID
+                                                'orderId']) // Ensure orderId is the document ID
                                             .update(
-                                            {'deliveryCompleted': false});
+                                                {'deliveryCompleted': false});
 
                                         // ScaffoldMessenger.of(context).showSnackBar(
                                         //   const SnackBar(content: Text('Delivery marked as completed')),
@@ -265,7 +324,6 @@ class _OrderListViewState extends State<OrderListView> {
                                         );
                                       }
                                     }
-
                                   },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor:
@@ -287,7 +345,73 @@ class _OrderListViewState extends State<OrderListView> {
                                         fontSize: 16,
                                         fontWeight: FontWeight.w700),
                                   ),
-                                )
+                                ),
+                                order['deliveryCompleted'] != true
+                                    ? GestureDetector(
+                                        onTap: () async {
+                                          try {
+                                            // await firestore.collection('Admin').doc('AdminDash').update({'Total_Cancelled' : FieldValue.increment(1)});
+                                            String today =
+                                                DateFormat('dd-MM-yyyy')
+                                                    .format(DateTime.now());
+                                            DocumentReference dailyStatsRef =
+                                                firestore
+                                                    .collection('Admin')
+                                                    .doc('OrderStatistics')
+                                                    .collection('DailyStats')
+                                                    .doc(today);
+
+                                            await firestore.runTransaction(
+                                                (transaction) async {
+                                              transaction.update(
+                                                  firestore
+                                                      .collection('Admin')
+                                                      .doc('AdminDash'),
+                                                  {
+                                                    'Total_Cancelled':
+                                                        FieldValue.increment(1),
+                                                  });
+
+                                              transaction.set(
+                                                  dailyStatsRef,
+                                                  {
+                                                    'Cancelled':
+                                                        FieldValue.increment(1),
+                                                  },
+                                                  SetOptions(merge: true));
+                                            });
+
+                                            await firestore
+                                                .collection('Orders')
+                                                .doc(order['orderId'])
+                                                .delete(); // Await the deletion
+
+                                            setState(() {
+                                              widget.orders.removeAt(
+                                                  index); // Remove from UI only after Firestore deletion
+                                            });
+
+                                            // Notify parent widget if a callback is provided
+                                            if (widget.markOrderAsCompleted !=
+                                                null) {
+                                              widget.markOrderAsCompleted!(
+                                                  order['orderId']);
+                                            }
+                                          } catch (e) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                  content: Text(
+                                                      'Error deleting order: $e')),
+                                            );
+                                          }
+                                        },
+                                        child: Icon(
+                                          Icons.cancel_outlined,
+                                          size: 35,
+                                          color: Color(0xFFEF959D),
+                                        ))
+                                    : Container()
                               ],
                             ),
                           ],

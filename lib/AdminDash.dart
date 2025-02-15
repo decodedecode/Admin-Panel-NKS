@@ -18,13 +18,25 @@ class _AdmindashState extends State<Admindash> {
   String storedPasscode = "";
   bool isSettingPasscode = false;
   String passcodeToConfirm = "";
+  List<Color> buttonColors = [];
 
   @override
   void initState() {
     super.initState();
     enteredPasscode.clear();
-    
     _loadPasscode();
+    _generateButtonColors();
+  }
+
+  /// Generate random colors for the buttons once per session
+  void _generateButtonColors() {
+    final random = Random();
+    buttonColors = List.generate(10, (index) => Color.fromARGB(
+      255,
+      random.nextInt(256),
+      random.nextInt(256),
+      random.nextInt(256),
+    ).withOpacity(0.1));
   }
 
   /// Fetch passcode from Firestore
@@ -48,6 +60,7 @@ class _AdmindashState extends State<Admindash> {
       print("Error loading passcode: $e");
     }
   }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -91,16 +104,12 @@ class _AdmindashState extends State<Admindash> {
     }
   }
 
-
-
-  void _onForgotPassword(){
-    
-    
-    
+  void _onForgotPassword() {
+    // Implement forgot password functionality
   }
-  Widget _forgotPassword (){
+
+  Widget _forgotPassword() {
     return ElevatedButton(onPressed: _onForgotPassword, child: Text('Forgot Password'));
-    
   }
 
   void _onSubmitPressed() {
@@ -142,8 +151,7 @@ class _AdmindashState extends State<Admindash> {
         Future.delayed(const Duration(milliseconds: 500), () {
           enteredPasscode.clear();
           didChangeDependencies();
-          
-          
+
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const AdminDashScreen()),
@@ -180,23 +188,13 @@ class _AdmindashState extends State<Admindash> {
   }
 
   Widget Dial(String num) {
-    Color _getRandomColor() {
-      final random = Random();
-      return Color.fromARGB(
-        255,
-        random.nextInt(256),
-        random.nextInt(256),
-        random.nextInt(256),
-      );
-    }
-
     return OutlinedButton(
       onPressed: () => _onNumberPressed(num),
       style: OutlinedButton.styleFrom(
         shape: const CircleBorder(),
         side: const BorderSide(color: Colors.grey),
         padding: const EdgeInsets.all(28.0),
-        backgroundColor: _getRandomColor().withOpacity(0.1),
+        backgroundColor: buttonColors[int.parse(num)],
       ),
       child: Text(
         num,

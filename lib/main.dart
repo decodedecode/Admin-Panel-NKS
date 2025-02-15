@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:nks_admin/AdminDash.dart';
@@ -39,14 +40,42 @@ class _OrderListScreenState extends State<OrderListScreen>
     with SingleTickerProviderStateMixin {
   List<Map<String, dynamic>> orders = [];
   late TabController _tabController;
+  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
+
+  Future<void> getToken() async {
+    try {
+      String? token = await _firebaseMessaging.getToken();
+      if (token != null) {
+        print('FCM Token: $token');
+        // Store or send the token to your server here
+      } else {
+        print('Failed to retrieve FCM token.');
+      }
+    } catch (e) {
+      print('Error retrieving FCM token: $e');
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    
 
+    _tabController = TabController(length: 3, vsync: this);
+    getToken();
     fetchOrders();
+    deleteExpiredOrders();
+  }
+
+  void deleteExpiredOrders() async {
+    final firestore = FirebaseFirestore.instance;
+    QuerySnapshot snapshot = await firestore
+        .collection('Orders')
+        .where('deletionTime', isLessThan: DateTime.now())
+        .get();
+
+    for (var doc in snapshot.docs) {
+      await firestore.collection('Orders').doc(doc.id).delete();
+    }
   }
 
   void markOrderAsCompleted(String orderId) async {
@@ -101,7 +130,6 @@ class _OrderListScreenState extends State<OrderListScreen>
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     List<Map<String, dynamic>> pendingOrders =
@@ -114,8 +142,9 @@ class _OrderListScreenState extends State<OrderListScreen>
         appBar: AppBar(
           backgroundColor: Colors.white10,
           title: Text(
-            'Orders',
-            style: GoogleFonts.manrope(fontWeight: FontWeight.w800),
+            'Pending: ${pendingOrders.length} | Completed: ${completedOrders.length}',
+            style:
+                GoogleFonts.manrope(fontSize: 20, fontWeight: FontWeight.w600),
           ),
           centerTitle: true,
           bottom: TabBar(
@@ -126,7 +155,7 @@ class _OrderListScreenState extends State<OrderListScreen>
 
               // controller: _tabController,indicatorColor: Color(0xFFF06449),
               tabs: [
-            Tab(
+                Tab(
                   child: Text(
                     'Pending',
                     style: GoogleFonts.kanit(
@@ -157,14 +186,16 @@ class _OrderListScreenState extends State<OrderListScreen>
           leading: GestureDetector(
               onTap: () {
                 print('object');
-              
-                
+                print(pendingOrders.length);
+                print(completedOrders.length);
                 setState(() {
-                  
                   fetchOrders();
                 });
               },
-              child: const Icon(Icons.delivery_dining_rounded, size: 40)),
+              child: const Icon(
+                Icons.directions_bike_rounded,
+                size: 30,
+              )),
         ),
         body: Stack(
           children: [
@@ -195,7 +226,7 @@ class _OrderListScreenState extends State<OrderListScreen>
             ]),
             Positioned(
                 right: 10,
-                bottom: 30,
+                bottom: 70,
                 child: ElevatedButton(
                     style: ElevatedButton.styleFrom(),
                     onPressed: () {
@@ -212,8 +243,6 @@ class _OrderListScreenState extends State<OrderListScreen>
                               fontSize: 18,
                               color: Colors.black),
                         ),
-
-
                       ],
                     ))),
           ],
